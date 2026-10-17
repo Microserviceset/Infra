@@ -29,16 +29,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Debug OIDC claims (temporary)
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const t = await core.getIDToken();
-            const c = JSON.parse(Buffer.from(t.split('.')[1], 'base64url').toString());
-            core.info(`sub        = ${c.sub}`);
-            core.info(`repository = ${c.repository}`);
-            core.info(`ref        = ${c.ref}`);
-
       - name: Auth to GCP as terraform-plan (read-only)
         uses: google-github-actions/auth@v2
         with:
