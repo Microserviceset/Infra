@@ -1,0 +1,103 @@
+# ---------- Images ----------
+image:
+  registry: asia-south1-docker.pkg.dev/aditest-511508/microservices
+  tag: "0.1.2"            # overridden per environment
+  pullPolicy: IfNotPresent
+
+# Kubernetes Secret holding POSTGRES_PASSWORD, JWT_SECRET, DJANGO_SECRET_KEY
+# Created outside git (never commit secrets)
+secretName: taskmanager-secrets
+
+# ---------- Shared settings ----------
+rabbitmqUrl: amqp://rabbitmq
+rabbitmqExchange: task_events
+rabbitmqDlxExchange: task_events.dlx
+
+defaultResources:
+  requests: { cpu: 50m, memory: 128Mi }
+  limits:   { memory: 256Mi }
+
+# ---------- Dependencies ----------
+postgres:
+  enabled: true           # production may switch to Cloud SQL later
+  image: postgres:16-alpine
+  storage: 1Gi
+  instances:
+    auth:      { user: auth,      db: auth_db }
+    task:      { user: task,      db: task_db }
+    reporting: { user: reporting, db: reporting_db }
+
+rabbitmq:
+  enabled: true
+  image: rabbitmq:3.13-management-alpine
+
+# ---------- App services ----------
+# secretEnv = keys pulled from the Secret (listed BEFORE env, so $(VAR) works in env)
+services:
+  api-gateway:
+    image: api-gateway
+    port: 4000
+    env:
+      PORT: "4000"
+      AUTH_SERVICE_URL: http://auth-service:4001
+      TASK_SERVICE_URL: http://task-service:4002
+      REPORTING_SERVICE_URL: http://reporting-service:4004
+      WEB_UI_ORIGIN: http://localhost:3000
+
+  auth-service:
+    image: auth-service
+    port: 4001
+    secretEnv: [POSTGRES_PASSWORD, JWT_SECRET]
+    env:
+      PORT: "4001"
+      DATABASE_URL: postgres://auth:$(POSTGRES_PASSWORD)@postgres-auth:5432/auth_db
+
+  task-service:
+    image: task-service
+    port: 4002
+    secretEnv: [POSTGRES_PASSWORD, JWT_SECRET]
+    env:
+      PORT: "4002"
+      DATABASE_URL: postgres://task:$(POSTGRES_PASSWORD)@postgres-task:5432/task_db
+      RABBITMQ_URL: amqp://rabbitmq
+      RABBITMQ_EXCHANGE: task_events
+      DEADLINE_WARNING_MINUTES: "60"
+      DEADLINE_CHECK_INTERVAL_MS: "30000"
+
+  notification-service:
+    image: notification-service
+    env:
+      RABBITMQ_URL: amqp://rabbitmq
+      RABBITMQ_EXCHANGE: task_events
+      RABBITMQ_DLX_EXCHANGE: task_events.dlx
+
+  reporting-service:
+    image: reporting-service
+    port: 4004
+    secretEnv: [POSTGRES_PASSWORD, DJANGO_SECRET_KEY]
+    command: ["sh", "-c", "python manage.py migrate && gunicorn reporting.wsgi:application --bind 0.0.0.0:4004"]
+    env:
+      POSTGRES_DB: reporting_db
+      POSTGRES_USER: reporting
+      POSTGRES_HOST: postgres-reporting
+      RABBITMQ_URL: amqp://rabbitmq
+      RABBITMQ_EXCHANGE: task_events
+      RABBITMQ_DLX_EXCHANGE: task_events.dlx
+
+  reporting-consumer:
+    image: reporting-service      # same image, different command
+    secretEnv: [POSTGRES_PASSWORD, DJANGO_SECRET_KEY]
+    command: ["sh", "-c", "python manage.py migrate && python manage.py consume_events"]
+    env:
+      POSTGRES_DB: reporting_db
+      POSTGRES_USER: reporting
+      POSTGRES_HOST: postgres-reporting
+      RABBITMQ_URL: amqp://rabbitmq
+      RABBITMQ_EXCHANGE: task_events
+      RABBITMQ_DLX_EXCHANGE: task_events.dlx
+
+  web-ui:
+    image: web-ui
+    port: 3000
+    env:
+      PORT: "3000"
