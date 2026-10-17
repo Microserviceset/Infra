@@ -1,0 +1,73 @@
+{{- if .Values.postgres.enabled }}
+{{- range $key, $pg := .Values.postgres.instances }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-{{ $key }}
+  labels:
+    app: postgres-{{ $key }}
+    {{- include "taskmanager.labels" $ | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    app: postgres-{{ $key }}
+  ports:
+    - port: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-{{ $key }}
+  labels:
+    app: postgres-{{ $key }}
+    {{- include "taskmanager.labels" $ | nindent 4 }}
+spec:
+  serviceName: postgres-{{ $key }}
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-{{ $key }}
+  template:
+    metadata:
+      labels:
+        app: postgres-{{ $key }}
+    spec:
+      containers:
+        - name: postgres
+          image: {{ $.Values.postgres.image }}
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: {{ $pg.user }}
+            - name: POSTGRES_DB
+              value: {{ $pg.db }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.secretName }}
+                  key: POSTGRES_PASSWORD
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "{{ $pg.user }}", "-d", "{{ $pg.db }}"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits:   { memory: 512Mi }
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ $.Values.postgres.storage }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: taskmanager
+description: Task manager microservices (gateway, auth, task, notification, reporting, web-ui) with Postgres and RabbitMQ
+type: application
+version: 0.1.0        # version of this chart
+appVersion: "0.1.2"   # app release it was written for

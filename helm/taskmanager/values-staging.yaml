@@ -1,0 +1,5 @@
+# Staging: the version under test
+image:
+  tag: "0.1.2"
+
+replicas: 1
