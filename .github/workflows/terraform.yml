@@ -1,0 +1,93 @@
+name: Terraform
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['terraform/**', '.github/workflows/terraform.yml']
+  push:
+    branches: [main]
+    paths: ['terraform/**', '.github/workflows/terraform.yml']
+
+permissions:
+  contents: read
+  id-token: write        # OIDC token for GCP
+  pull-requests: write   # post plan as PR comment
+
+concurrency:
+  group: terraform-core
+  cancel-in-progress: false   # never kill a running apply
+
+defaults:
+  run:
+    working-directory: terraform/core
+
+jobs:
+  plan:
+    name: terraform-plan
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Auth to GCP as terraform-plan (read-only)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.TF_PLAN_SA }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.5"
+          terraform_wrapper: false
+
+      - name: Format check
+        run: terraform fmt -check -recursive
+
+      - name: Init
+        run: terraform init -input=false
+
+      - name: Validate
+        run: terraform validate
+
+      - name: Plan
+        run: |
+          terraform plan -input=false -no-color -out=tfplan
+          terraform show -no-color tfplan > plan.txt
+
+      - name: Comment plan on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let plan = fs.readFileSync('terraform/core/plan.txt', 'utf8');
+            if (plan.length > 60000) plan = plan.slice(0, 60000) + '\n... (truncated)';
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body: '### Terraform plan — `terraform/core`\n```\n' + plan + '\n```'
+            });
+
+  apply:
+    name: terraform-apply
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: production      # main only + your approval
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Auth to GCP as terraform-apply
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.TF_APPLY_SA }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.5"
+          terraform_wrapper: false
+
+      - name: Init
+        run: terraform init -input=false
+
+      - name: Apply
+        run: terraform apply -input=false -auto-approve
