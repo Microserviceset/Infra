@@ -43,8 +43,10 @@ spec:
           readinessProbe:
             exec:
               command: ["rabbitmq-diagnostics", "-q", "ping"]
-            initialDelaySeconds: 15
+            initialDelaySeconds: 20
             periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 6
           resources:
             requests: { cpu: 100m, memory: 256Mi }
             limits:   { memory: 512Mi }
