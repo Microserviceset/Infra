@@ -1,0 +1,13 @@
+# Tells Argo CD where ARC's Helm charts live (public OCI registry, no credentials)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: repo-arc-charts
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  type: helm
+  name: arc-charts
+  url: ghcr.io/actions/actions-runner-controller-charts
+  enableOCI: "true"
