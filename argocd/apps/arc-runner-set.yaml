@@ -1,0 +1,33 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: arc-runner-set
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: ghcr.io/actions/actions-runner-controller-charts
+    chart: gha-runner-scale-set
+    targetRevision: 0.15.0            # same version as the controller
+    helm:
+      valuesObject:
+        githubConfigUrl: https://github.com/Microserviceset
+        githubConfigSecret: arc-github-app
+        runnerGroup: arc-internal
+        runnerScaleSetName: arc-runner-set
+        minRunners: 0
+        maxRunners: 2
+        containerMode:
+          type: dind
+        controllerServiceAccount:
+          namespace: arc-systems
+          name: arc-controller-gha-rs-controller
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: arc-runners
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
