@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sonarqube
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://SonarSource.github.io/helm-chart-sonarqube
+    chart: sonarqube
+    targetRevision: 2026.5.1002        # pinned; upgrade only via PR
+    helm:
+      valuesObject:
+        community:
+          enabled: true
+        monitoringPasscodeSecretName: sonarqube-monitoring
+        monitoringPasscodeSecretKey: passcode
+        jdbcOverwrite:
+          enabled: true
+          jdbcUrl: jdbc:postgresql://sonarqube-postgres:5432/sonarqube
+          jdbcUsername: sonarqube
+          jdbcSecretName: sonarqube-db
+          jdbcSecretPasswordKey: password
+        persistence:
+          enabled: true
+          size: 5Gi
+        resources:
+          requests: { cpu: 500m, memory: 2Gi }
+          limits:   { cpu: "2", memory: 4Gi }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: sonarqube
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
