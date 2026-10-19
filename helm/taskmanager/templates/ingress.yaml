@@ -1,0 +1,14 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: taskmanager
+  annotations:
+    kubernetes.io/ingress.class: gce        # GKE built-in controller → Google external HTTP LB
+spec:
+  defaultBackend:
+    service:
+      name: web-ui
+      port:
+        number: 3000
+{{- end }}
