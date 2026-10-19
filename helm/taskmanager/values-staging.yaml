@@ -3,3 +3,6 @@ image:
   tag: "0.1.2"
 
 replicas: 1
+
+ingress:
+  enabled: true
